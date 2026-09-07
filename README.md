@@ -13,9 +13,9 @@ Create a `.env` file next to the executable (see `.env.example`) with:
 
 ## How it works
 
-This logs into the router's admin page, the same one you'd open in a browser, goes to Status > FastMile Radio, and reads off the Cellular Packets Upload/Download totals and the device's running time, the same numbers you'd see on that page yourself. Instead of a browser, it makes those same requests directly and writes the results as one row in a CSV file: timestamp, upload, download, uptime.
+This logs into the router's admin page, the same one you'd open in a browser, goes to Status > FastMile Radio, and fetches the Cellular Packets Upload/Download totals and the device's running time. Instead of a browser, it makes those same requests directly and writes the results as one row in a CSV file with the **timestamp, upload, download, and uptime**.
 
-If anything goes wrong (can't log in, can't reach the router, can't write the file), it sends a failure email if Mailjet is configured, otherwise it just prints the error. Either way, it doesn't retry. Each run is one attempt; the next attempt is whatever triggers the next run.
+If anything goes wrong (can't log in, can't reach the router, can't write the file), it sends a failure email if Mailjet is configured, otherwise it just prints the error. Either way, it doesn't retry. Each run is one attempt.
 
 ## Layout
 
