@@ -1,6 +1,6 @@
-# Nokia FastMile Stats Logger
+# Nokia FastMile Data Logger
 
-A small cross-platform tool that logs into a Nokia FastMile 5G router's web UI, reads the Cellular Packets Upload/Download totals and device uptime, and appends a timestamped row to a CSV file. It's meant to run once per invocation, triggered by Windows Task Scheduler/cron at will.
+A small cross-platform tool that logs into a Nokia FastMile 5G router's web UI, reads the Cellular Packets Upload/Download totals and device uptime, and appends a timestamped row to a CSV file. It collects one data point per execution, and is intended to be triggered by Windows Task Scheduler/cron at will.
 
 ## Setup
 
@@ -9,8 +9,7 @@ Create a `.env` file next to the executable (see `.env.example`) with:
 - `USERNAME`, `PASSWORD` - router admin login
 - `STATISTICS_URL` - the router's status page URL (e.g. `http://192.168.1.254/web_whw/#/status/fastmile5gradio`); only the scheme and host are used, the rest is just where you'd view this in a browser
 - `OUT_DIR` - path to the CSV file to append to (optional; defaults to `data.csv` next to the executable)
-- `MAILJET_API_KEY`, `MAILJET_API_SECRET` - Mailjet API credentials, used to send a failure notification email
-- `MAILJET_FROM_EMAIL`, `MAILJET_TO_EMAIL` - sender and recipient for that email
+- `MAILJET_API_KEY`, `MAILJET_API_SECRET`, `MAILJET_FROM_EMAIL`, `MAILJET_TO_EMAIL` - optional. If all four are set, a failure sends an email through Mailjet. If any are missing, failures print to stderr instead
 
 ## How it works
 
@@ -19,7 +18,7 @@ Create a `.env` file next to the executable (see `.env.example`) with:
 3. `GET /fastmile_radio_status_web_app.cgi` for `cellular_stats[].BytesSent` / `BytesReceived`, in raw bytes, and derive MiB (divide by 1,048,576) and GiB (divide by 1,073,741,824) from each.
 4. `GET /device_status_web_app.cgi` for `UpTime`, in seconds.
 5. Append one CSV row: timestamp, upload bytes/MiB/GiB, download bytes/MiB/GiB, uptime (seconds).
-6. On any failure, send a failure email through Mailjet's HTTP API and exit non-zero. On success, exit silently - no email, no output.
+6. On any failure, send a failure email through Mailjet's HTTP API if configured, then exit. On success, exit silently.
 
 There's no retry logic anywhere in this tool. Each run is a single attempt; the next attempt is whatever triggers the next run.
 

@@ -33,6 +33,21 @@ func TestSendFailureEmailMissingCredentials(t *testing.T) {
 	}
 }
 
+func TestMailjetConfigured(t *testing.T) {
+	if nokialogger.MailjetConfigured(&nokialogger.Config{}) {
+		t.Error("empty config should not be considered configured")
+	}
+	if !nokialogger.MailjetConfigured(fullMailjetConfig()) {
+		t.Error("fully populated config should be considered configured")
+	}
+
+	partial := fullMailjetConfig()
+	partial.MailjetToEmail = ""
+	if nokialogger.MailjetConfigured(partial) {
+		t.Error("config missing MailjetToEmail should not be considered configured")
+	}
+}
+
 func TestSendFailureEmailSuccess(t *testing.T) {
 	var gotAuthUser, gotAuthPass string
 	var gotBody map[string]interface{}

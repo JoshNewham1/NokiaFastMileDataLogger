@@ -25,10 +25,11 @@ func Run() {
 	}
 }
 
-// Fail attempts to notify the user by email, falls back to stderr if that
-// fails or isn't configured, and exits non-zero. There is no retry.
+// Fail attempts to notify the user by email if Mailjet is configured, falls
+// back to stderr if that isn't configured or the send itself fails, and
+// exits non-zero. There is no retry.
 func Fail(cfg *Config, message string) {
-	if cfg != nil {
+	if cfg != nil && MailjetConfigured(cfg) {
 		if err := SendFailureEmail(cfg, message); err != nil {
 			fmt.Fprintf(os.Stderr, "nokia_logger: %s\n(failure email also failed: %v)\n", message, err)
 			os.Exit(1)

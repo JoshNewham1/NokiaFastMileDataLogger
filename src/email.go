@@ -9,15 +9,18 @@ import (
 	"time"
 )
 
-// MailjetSendURL is a var, not a const, so tests can point it at a fake
-// server instead of the real Mailjet API.
+// var so tests can point it at a fake server
 var MailjetSendURL = "https://api.mailjet.com/v3.1/send"
+
+func MailjetConfigured(cfg *Config) bool {
+	return cfg.MailjetAPIKey != "" && cfg.MailjetAPISecret != "" && cfg.MailjetFromEmail != "" && cfg.MailjetToEmail != ""
+}
 
 // SendFailureEmail sends a one-off failure notification through Mailjet's
 // HTTP API. It returns an error if credentials aren't configured, if the
 // request can't be sent, or if Mailjet returns a non-2xx status.
 func SendFailureEmail(cfg *Config, message string) error {
-	if cfg.MailjetAPIKey == "" || cfg.MailjetAPISecret == "" || cfg.MailjetFromEmail == "" || cfg.MailjetToEmail == "" {
+	if !MailjetConfigured(cfg) {
 		return fmt.Errorf("Mailjet credentials not configured")
 	}
 
