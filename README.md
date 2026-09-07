@@ -23,12 +23,23 @@ Create a `.env` file next to the executable (see `.env.example`) with:
 
 There's no retry logic anywhere in this tool. Each run is a single attempt; the next attempt is whatever triggers the next run.
 
+## Layout
+
+- `src/` - the `nokialogger` library package (config loading, login, stats fetch, CSV output, failure email) plus `src/cmd/nokia_logger/main.go`, a one-line entrypoint that calls it
+- `tests/` - black-box tests (`package nokialogger_test`) exercising `src/`'s exported API against fake HTTP servers, no real router required
+
 ## Building
 
 Cross-compile from Linux or macOS:
 
 ```
-GOOS=windows GOARCH=amd64 go build -o nokia_logger.exe .
+GOOS=windows GOARCH=amd64 go build -o nokia_logger.exe ./src/cmd/nokia_logger
+```
+
+## Testing
+
+```
+go test ./tests/...
 ```
 
 ## Scheduling on Windows
