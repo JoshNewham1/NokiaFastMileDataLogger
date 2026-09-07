@@ -13,14 +13,9 @@ Create a `.env` file next to the executable (see `.env.example`) with:
 
 ## How it works
 
-1. `GET /login_web_app.cgi?nonce` for a nonce, a random key, and an RSA public key. The public key goes unused here - the router's web UI sends the login's AES key/IV as plain random bytes instead of RSA-encrypting them, and this tool copies that instead of guessing at something stronger.
-2. Derive the login hashes (SHA256-based, matching the router's own JavaScript) and `POST` them to `/login_web_app.cgi`, which sets a session cookie.
-3. `GET /fastmile_radio_status_web_app.cgi` for `cellular_stats[].BytesSent` / `BytesReceived`, in raw bytes, and derive MiB (divide by 1,048,576) and GiB (divide by 1,073,741,824) from each.
-4. `GET /device_status_web_app.cgi` for `UpTime`, in seconds.
-5. Append one CSV row: timestamp, upload bytes/MiB/GiB, download bytes/MiB/GiB, uptime (seconds).
-6. On any failure, send a failure email through Mailjet's HTTP API if configured, then exit. On success, exit silently.
+This logs into the router's admin page, the same one you'd open in a browser, goes to Status > FastMile Radio, and reads off the Cellular Packets Upload/Download totals and the device's running time, the same numbers you'd see on that page yourself. Instead of a browser, it makes those same requests directly and writes the results as one row in a CSV file: timestamp, upload, download, uptime.
 
-There's no retry logic anywhere in this tool. Each run is a single attempt; the next attempt is whatever triggers the next run.
+If anything goes wrong (can't log in, can't reach the router, can't write the file), it sends a failure email if Mailjet is configured, otherwise it just prints the error. Either way, it doesn't retry. Each run is one attempt; the next attempt is whatever triggers the next run.
 
 ## Layout
 
@@ -29,7 +24,12 @@ There's no retry logic anywhere in this tool. Each run is a single attempt; the 
 
 ## Building
 
-Cross-compile from Linux or macOS:
+Build for Linux:
+```
+go build -o nokia_logger ./src/cmd/nokia_logger
+```
+
+Cross-compile for Windows (from Linux):
 
 ```
 GOOS=windows GOARCH=amd64 go build -o nokia_logger.exe ./src/cmd/nokia_logger
@@ -45,7 +45,12 @@ go test ./tests/...
 
 Add a Task Scheduler task with an "At startup" trigger that runs `nokia_logger.exe` with its working directory set to wherever `.env` lives. If you want more than one data point per boot, add a second trigger with a repeat interval, and set the task to skip a new instance if one's already running.
 
+### Technical notes
+
+- Login uses the same nonce/SHA256 challenge as the router's own JavaScript, POSTed to `/login_web_app.cgi` to get a session cookie. The nonce response also includes an RSA public key that the router's own web UI doesn't use for this step, it sends the AES key/IV as plain random bytes instead, and we copy this behaviour.
+- Stats come from `GET /fastmile_radio_status_web_app.cgi` (`cellular_stats[].BytesSent`/`BytesReceived`, in raw bytes) and `GET /device_status_web_app.cgi` (`UpTime`, in seconds).
+- The CSV records upload/download as raw bytes plus derived MiB (divide by 1,048,576) and GiB (divide by 1,073,741,824), since that's what the FastMile Radio page itself shows.
+
 ## Limitations
 
 - Built and tested against one model, the Nokia FastMile 5G-24W-A. Other models or firmware versions may use a different login flow or different field names.
-- We use MiB and GiB, alongside raw bytes, as that is what is shown on the Fastmile Radio page
