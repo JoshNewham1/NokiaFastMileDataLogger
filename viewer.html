@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nokia Data Usage Viewer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js" integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+  :root {
+    --accent: #6366F1;
+    --accent-strong: #818CF8;
+    --accent-soft: rgba(99,102,241,0.14);
+    --good: #22C55E;
+    --warn: #F59E0B;
+    --danger: #F43F5E;
+    --text: #0F172A;
+    --muted: #64748B;
+    --panel: #FFFFFF;
+    --panel-2: #F1F5F9;
+    --bg: #F8FAFC;
+    --border: #E2E8F0;
+    --shadow: 0 1px 2px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --accent: #818CF8;
+      --accent-strong: #A5B4FC;
+      --accent-soft: rgba(129,140,248,0.16);
+      --good: #4ADE80;
+      --warn: #FBBF24;
+      --danger: #FB7185;
+      --text: #E7EAF1;
+      --muted: #8B93A7;
+      --panel: #131826;
+      --panel-2: #1B2233;
+      --bg: #0B0F19;
+      --border: #232B3D;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --accent: #818CF8;
+    --accent-strong: #A5B4FC;
+    --accent-soft: rgba(129,140,248,0.16);
+    --good: #4ADE80;
+    --warn: #FBBF24;
+    --danger: #FB7185;
+    --text: #E7EAF1;
+    --muted: #8B93A7;
+    --panel: #131826;
+    --panel-2: #1B2233;
+    --bg: #0B0F19;
+    --border: #232B3D;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 12px 32px rgba(0,0,0,0.4);
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 32px 16px 70px;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  h1, h2, h3 { font-family: inherit; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+  header p { color: var(--muted); margin: 4px 0 0; font-size: 0.92rem; }
+  #themeToggle {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.82rem; font-weight: 500;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--muted);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #themeToggle:hover { color: var(--text); border-color: var(--accent); }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 22px;
+    margin-bottom: 18px;
+    box-shadow: var(--shadow);
+  }
+  .card h2 { color: var(--text); font-size: 1rem; font-weight: 600; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 150px; }
+  .field label { font-size: 0.78rem; color: var(--muted); font-weight: 500; }
+  input[type="number"], input[type="file"] {
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel-2);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  input[type="number"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .error-text { color: var(--danger); font-size: 0.76rem; min-height: 1em; }
+  button, .toggle-btn {
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 9px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  button:hover, .toggle-btn:hover { background: var(--accent); color: #fff; }
+  .summary-grid { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; }
+  .percent-big {
+    font-size: 3.2rem; font-weight: 800; line-height: 1;
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .percent-big.over { background: linear-gradient(135deg, var(--danger), var(--warn)); -webkit-background-clip: text; background-clip: text; }
+  .stat-line { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+  .banner {
+    margin-top: 14px;
+    padding: 11px 15px;
+    border-radius: 10px;
+    font-size: 0.86rem;
+    border: 1px solid transparent;
+  }
+  .banner.ok { background: rgba(34,197,94,0.12); color: var(--good); border-color: rgba(34,197,94,0.25); }
+  .banner.warn { background: rgba(245,158,11,0.12); color: var(--warn); border-color: rgba(245,158,11,0.25); }
+  .banner.danger { background: rgba(244,63,94,0.12); color: var(--danger); border-color: rgba(244,63,94,0.25); }
+  .assumptions { font-size: 0.78rem; color: var(--muted); }
+  .assumptions summary { cursor: pointer; color: var(--muted); font-weight: 500; }
+  .assumptions ul { margin: 8px 0 0; padding-left: 18px; }
+  canvas { max-width: 100%; }
+  .chart-box { position: relative; height: 340px; }
+  #compareSection { display: none; }
+  #compareSection.shown { display: block; }
+  .parse-error { color: var(--danger); font-size: 0.85rem; margin-top: 8px; white-space: pre-wrap; }
+  footer { text-align: center; color: var(--muted); font-size: 0.78rem; margin-top: 36px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>Nokia Data Usage Viewer</h1>
+    <p>Everything below runs entirely in your browser. The CSV you pick is never uploaded anywhere.</p>
+  </div>
+  <button type="button" id="themeToggle" aria-label="Toggle dark/light theme">
+    <span id="themeIcon">&#9728;&#65039;</span> <span id="themeLabel">Light</span>
+  </button>
+</header>
+
+<section class="card">
+  <h2>1. Load data</h2>
+  <div class="row">
+    <div class="field">
+      <label for="csvInput">data.csv</label>
+      <input type="file" id="csvInput" accept=".csv,text/csv">
+    </div>
+  </div>
+  <div id="parseError" class="parse-error" hidden></div>
+</section>
+
+<section class="card">
+  <h2>2. Settings</h2>
+  <div class="row">
+    <div class="field">
+      <label for="limitInput">Data limit (GiB, combined up+down)</label>
+      <input type="number" id="limitInput" min="0.01" step="1">
+      <div class="error-text" id="limitError"></div>
+    </div>
+    <div class="field">
+      <label for="resetDayInput">Resets on day of month (1-28)</label>
+      <input type="number" id="resetDayInput" min="1" max="28" step="1">
+      <div class="error-text" id="resetDayError"></div>
+    </div>
+  </div>
+  <details class="assumptions">
+    <summary>Assumptions this tool makes</summary>
+    <ul>
+      <li>The limit is entered in <strong>GiB</strong>.</li>
+      <li>Period boundaries use your <strong>browser's local time</strong>, not the router's timezone.</li>
+      <li>Forecasting is done by averaging the daily usage over the period.</li>
+      <li>A router reboot is detected when the boot time (timestamp minus uptime) shifts by more than 2 minutes, or usage decreases between two rows.</li>
+    </ul>
+  </details>
+</section>
+
+<section class="card">
+  <h2>This period's usage</h2>
+  <div class="summary-grid">
+    <div>
+      <div class="percent-big" id="percentUsed">-</div>
+      <div class="stat-line" id="usageLine">Load a CSV to see usage</div>
+      <div class="stat-line" id="periodLine"></div>
+    </div>
+  </div>
+  <div id="forecastBanner" class="banner" hidden></div>
+</section>
+
+<section class="card">
+  <h2>Usage this period</h2>
+  <div class="chart-box"><canvas id="mainChart"></canvas></div>
+</section>
+
+<section class="card">
+  <button type="button" id="compareToggle" class="toggle-btn">Compare past periods &#9660;</button>
+  <div id="compareSection">
+    <div class="chart-box" style="margin-top:16px;"><canvas id="compareChart"></canvas></div>
+  </div>
+</section>
+
+<footer>Reads stats_upload_gib / stats_download_gib from the logger's CSV. See README.md for details.</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var COLORS = {
+    accent: "#6366F1",
+    good: "#22C55E",
+    warn: "#F59E0B",
+    danger: "#F43F5E"
+  };
+  var PALETTE = ["#6366F1", "#22C55E", "#F59E0B", "#EC4899", "#06B6D4", "#F43F5E"];
+  var REBOOT_TOLERANCE_MS = 120 * 1000; // 2 minutes
+  var STORAGE_KEY = "nokiaViewerConfig";
+  var DEFAULT_CONFIG = { limitGiB: 1000, resetDay: 8 };
+
+  var state = {
+    rows: null,          // parsed + sorted raw rows
+    correctedUpload: null,
+    correctedDownload: null, // arrays of {timestampMs, value}
+    combined: null,      // array of {timestampMs, value}
+    config: loadConfig(),
+    mainChart: null,
+    compareChart: null,
+    compareBuilt: false
+  };
+
+  // ---------- config / localStorage ----------
+
+  function loadConfig() {
+    var cfg = { limitGiB: DEFAULT_CONFIG.limitGiB, resetDay: DEFAULT_CONFIG.resetDay };
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (isValidLimit(parsed.limitGiB)) cfg.limitGiB = parsed.limitGiB;
+        if (isValidResetDay(parsed.resetDay)) cfg.resetDay = parsed.resetDay;
+      }
+    } catch (e) { /* ignore corrupt/missing storage, use defaults */ }
+    return cfg;
+  }
+
+  function saveConfig() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state.config));
+    } catch (e) { /* localStorage unavailable (private mode etc.) - non-fatal */ }
+  }
+
+  function isValidLimit(v) {
+    return typeof v === "number" && isFinite(v) && v > 0;
+  }
+  function isValidResetDay(v) {
+    return typeof v === "number" && isFinite(v) && Math.floor(v) === v && v >= 1 && v <= 28;
+  }
+
+  // ---------- CSV parsing ----------
+
+  var REQUIRED_COLUMNS = ["timestamp", "stats_upload_gib", "stats_download_gib", "uptime_seconds"];
+
+  function parseCsv(text) {
+    var lines = text.split(/\r\n|\n|\r/).filter(function (l) { return l.trim().length > 0; });
+    if (lines.length < 1) throw new Error("The file is empty.");
+
+    var header = lines[0].split(",").map(function (h) { return h.trim(); });
+    var colIndex = {};
+    header.forEach(function (name, i) { colIndex[name] = i; });
+
+    var missing = REQUIRED_COLUMNS.filter(function (c) { return !(c in colIndex); });
+    if (missing.length > 0) {
+      throw new Error("Missing expected column(s): " + missing.join(", ") +
+        ". Found columns: " + header.join(", "));
+    }
+
+    var rows = [];
+    var skipped = 0;
+    for (var i = 1; i < lines.length; i++) {
+      var parts = lines[i].split(",");
+      var tsStr = (parts[colIndex.timestamp] || "").trim();
+      var upload = parseFloat(parts[colIndex.stats_upload_gib]);
+      var download = parseFloat(parts[colIndex.stats_download_gib]);
+      var uptime = parseFloat(parts[colIndex.uptime_seconds]);
+      var ts = Date.parse(tsStr);
+
+      if (!tsStr || isNaN(ts) || isNaN(upload) || isNaN(download) || isNaN(uptime)) {
+        skipped++;
+        continue;
+      }
+      rows.push({
+        timestampMs: ts,
+        rawUpload: upload,
+        rawDownload: download,
+        uptimeSeconds: uptime
+      });
+    }
+
+    if (rows.length === 0) {
+      throw new Error("No valid data rows were found in this file.");
+    }
+
+    rows.sort(function (a, b) { return a.timestampMs - b.timestampMs; });
+
+    return { rows: rows, skipped: skipped };
+  }
+
+  // ---------- reboot detection / running-total correction ----------
+
+  // rawKey: "rawUpload" or "rawDownload"
+  function correctSeries(rows, rawKey) {
+    var corrected = [];
+    var accumulator = 0;
+    var prevRaw = null;
+    var prevBootTimeMs = null;
+
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      var bootTimeMs = row.timestampMs - row.uptimeSeconds * 1000;
+
+      if (prevBootTimeMs !== null) {
+        var bootShifted = Math.abs(bootTimeMs - prevBootTimeMs) > REBOOT_TOLERANCE_MS;
+        var counterDropped = row[rawKey] < prevRaw;
+        if (bootShifted || counterDropped) {
+          accumulator += prevRaw;
+        }
+      }
+
+      corrected.push({ timestampMs: row.timestampMs, value: accumulator + row[rawKey] });
+      prevRaw = row[rawKey];
+      prevBootTimeMs = bootTimeMs;
+    }
+    return corrected;
+  }
+
+  function combineSeries(upload, download) {
+    // upload/download are same length, same timestamps (built from the same rows)
+    return upload.map(function (u, i) {
+      return { timestampMs: u.timestampMs, value: u.value + download[i].value };
+    });
+  }
+
+  // ---------- period math ----------
+
+  function periodStart(date, resetDay) {
+    var day = date.getDate();
+    var month = date.getMonth();
+    var year = date.getFullYear();
+    if (day < resetDay) month -= 1;
+    return new Date(year, month, resetDay, 0, 0, 0, 0);
+  }
+
+  function periodEnd(start, resetDay) {
+    return new Date(start.getFullYear(), start.getMonth() + 1, resetDay, 0, 0, 0, 0);
+  }
+
+  // last known value at-or-before targetMs; 0 if none exists
+  function baselineAt(series, targetMs) {
+    var candidate = 0;
+    for (var i = 0; i < series.length; i++) {
+      if (series[i].timestampMs <= targetMs) {
+        candidate = series[i].value;
+      } else {
+        break;
+      }
+    }
+    return candidate;
+  }
+
+  // value of the series at-or-before targetMs, or null if no data at all
+  function valueAt(series, targetMs) {
+    var candidate = null;
+    for (var i = 0; i < series.length; i++) {
+      if (series[i].timestampMs <= targetMs) {
+        candidate = series[i].value;
+      } else {
+        break;
+      }
+    }
+    return candidate;
+  }
+
+  function daysBetween(aMs, bMs) {
+    return (bMs - aMs) / 86400000;
+  }
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  // ---------- rendering ----------
+
+  function renderAll() {
+    if (!state.combined) return;
+
+    var now = new Date();
+    var resetDay = state.config.resetDay;
+    var limitGiB = state.config.limitGiB;
+
+    var pStart = periodStart(now, resetDay);
+    var pEnd = periodEnd(pStart, resetDay);
+    var pStartMs = pStart.getTime();
+    var pEndMs = pEnd.getTime();
+    var nowMs = now.getTime();
+
+    var baseline = baselineAt(state.combined, pStartMs);
+    var valueNow = valueAt(state.combined, nowMs);
+    var currentUsage = (valueNow === null) ? 0 : Math.max(0, valueNow - baseline);
+
+    var daysElapsed = Math.max(daysBetween(pStartMs, nowMs), 1 / 24); // floor at 1 hour to avoid /0
+    var totalDaysInPeriod = daysBetween(pStartMs, pEndMs);
+    var dailyRate = currentUsage / daysElapsed;
+    var daysRemaining = Math.max(totalDaysInPeriod - daysElapsed, 0);
+    var projectedTotal = currentUsage + dailyRate * daysRemaining;
+
+    renderSummary(currentUsage, limitGiB, projectedTotal, pStart, pEnd);
+    renderMainChart(pStart, pEnd, baseline, currentUsage, dailyRate, daysElapsed, totalDaysInPeriod, limitGiB);
+
+    if (state.compareBuilt) {
+      renderCompareChart();
+    }
+  }
+
+  function renderSummary(currentUsage, limitGiB, projectedTotal, pStart, pEnd) {
+    var pct = (currentUsage / limitGiB) * 100;
+    var pctEl = document.getElementById("percentUsed");
+    pctEl.textContent = pct.toFixed(1) + "%";
+    pctEl.classList.toggle("over", pct >= 100);
+
+    document.getElementById("usageLine").textContent =
+      currentUsage.toFixed(2) + " / " + limitGiB + " GiB used this period";
+    document.getElementById("periodLine").textContent =
+      "Period: " + formatDate(pStart) + " – " + formatDate(pEnd);
+
+    var banner = document.getElementById("forecastBanner");
+    banner.hidden = false;
+    if (projectedTotal > limitGiB) {
+      var overBy = projectedTotal - limitGiB;
+      banner.className = "banner danger";
+      banner.textContent = "At the current daily rate, you're projected to use " +
+        projectedTotal.toFixed(1) + " GiB by period end — " +
+        overBy.toFixed(1) + " GiB over your limit.";
+    } else if (projectedTotal > limitGiB * 0.9) {
+      banner.className = "banner warn";
+      banner.textContent = "At the current daily rate, you're projected to use " +
+        projectedTotal.toFixed(1) + " GiB by period end, close to your " + limitGiB + " GiB limit.";
+    } else {
+      banner.className = "banner ok";
+      banner.textContent = "At the current daily rate, you're projected to use " +
+        projectedTotal.toFixed(1) + " GiB by period end, within your " + limitGiB + " GiB limit.";
+    }
+  }
+
+  function formatDate(d) {
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
+
+  function dayTickLabel(pStart, days) {
+    var d = new Date(pStart.getTime() + days * 86400000);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  function renderMainChart(pStart, pEnd, baseline, currentUsage, dailyRate, daysElapsed, totalDaysInPeriod, limitGiB) {
+    var pStartMs = pStart.getTime();
+    var pEndMs = pEnd.getTime();
+
+    var actualPoints = [{ x: 0, y: 0 }];
+    state.combined.forEach(function (pt) {
+      if (pt.timestampMs >= pStartMs && pt.timestampMs <= pEndMs) {
+        actualPoints.push({ x: daysBetween(pStartMs, pt.timestampMs), y: pt.value - baseline });
+      }
+    });
+    // ensure "now" point present so forecast joins cleanly
+    var nowDays = daysElapsed;
+    actualPoints.push({ x: nowDays, y: currentUsage });
+
+    var forecastPoints = [
+      { x: nowDays, y: currentUsage },
+      { x: totalDaysInPeriod, y: currentUsage + dailyRate * (totalDaysInPeriod - daysElapsed) }
+    ];
+
+    var limitLine = [
+      { x: 0, y: limitGiB },
+      { x: totalDaysInPeriod, y: limitGiB }
+    ];
+
+    var yMax = Math.max(limitGiB * 1.1, forecastPoints[1].y * 1.1, 1);
+    var textColor = cssVar("--muted");
+    var gridColor = cssVar("--border");
+
+    if (state.mainChart) state.mainChart.destroy();
+    var ctx = document.getElementById("mainChart").getContext("2d");
+    state.mainChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        datasets: [
+          {
+            label: "Actual usage (GiB)",
+            data: actualPoints,
+            borderColor: COLORS.accent,
+            backgroundColor: COLORS.accent,
+            fill: false,
+            tension: 0.15,
+            pointRadius: 2
+          },
+          {
+            label: "Forecast",
+            data: forecastPoints,
+            borderColor: COLORS.warn,
+            borderDash: [6, 4],
+            fill: false,
+            pointRadius: 0
+          },
+          {
+            label: "Limit (" + limitGiB + " GiB)",
+            data: limitLine,
+            borderColor: COLORS.danger,
+            borderDash: [2, 3],
+            fill: false,
+            pointRadius: 0
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "nearest", intersect: false },
+        plugins: {
+          legend: { labels: { color: textColor } }
+        },
+        scales: {
+          x: {
+            type: "linear",
+            min: 0,
+            max: totalDaysInPeriod,
+            title: { display: true, text: "Date", color: textColor },
+            ticks: {
+              color: textColor,
+              callback: function (value) { return dayTickLabel(pStart, value); }
+            },
+            grid: { color: gridColor }
+          },
+          y: {
+            min: 0,
+            max: yMax,
+            title: { display: true, text: "GiB", color: textColor },
+            ticks: { color: textColor },
+            grid: { color: gridColor }
+          }
+        }
+      }
+    });
+  }
+
+  // ---------- compare-periods chart ----------
+
+  function segmentIntoPeriods(series, resetDay) {
+    if (series.length === 0) return [];
+    var firstMs = series[0].timestampMs;
+    var lastMs = series[series.length - 1].timestampMs;
+
+    var start = periodStart(new Date(firstMs), resetDay);
+    var periods = [];
+
+    while (start.getTime() <= lastMs) {
+      var end = periodEnd(start, resetDay);
+      var startMs = start.getTime();
+      var endMs = end.getTime();
+      var baseline = baselineAt(series, startMs);
+
+      var points = [];
+      series.forEach(function (pt) {
+        if (pt.timestampMs >= startMs && pt.timestampMs < endMs) {
+          points.push({ x: daysBetween(startMs, pt.timestampMs), y: pt.value - baseline });
+        }
+      });
+
+      if (points.length > 0) {
+        var isOpenPeriod = endMs > Date.now();
+        periods.push({
+          label: formatDate(start) + " – " + (isOpenPeriod ? "present" : formatDate(end)),
+          points: points
+        });
+      }
+
+      start = end;
+    }
+    return periods;
+  }
+
+  function renderCompareChart() {
+    var periods = segmentIntoPeriods(state.combined, state.config.resetDay);
+    var textColor = cssVar("--muted");
+    var gridColor = cssVar("--border");
+
+    if (state.compareChart) state.compareChart.destroy();
+    var ctx = document.getElementById("compareChart").getContext("2d");
+    var datasets = periods.map(function (p, i) {
+      return {
+        label: p.label,
+        data: p.points,
+        borderColor: PALETTE[i % PALETTE.length],
+        backgroundColor: PALETTE[i % PALETTE.length],
+        fill: false,
+        pointRadius: 2,
+        tension: 0.1
+      };
+    });
+
+    state.compareChart = new Chart(ctx, {
+      type: "line",
+      data: { datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "nearest", intersect: false },
+        plugins: {
+          legend: { labels: { color: textColor } }
+        },
+        scales: {
+          x: {
+            type: "linear",
+            min: 0,
+            title: { display: true, text: "Days since period start", color: textColor },
+            ticks: { color: textColor },
+            grid: { color: gridColor }
+          },
+          y: {
+            min: 0,
+            title: { display: true, text: "GiB", color: textColor },
+            ticks: { color: textColor },
+            grid: { color: gridColor }
+          }
+        }
+      }
+    });
+  }
+
+  // ---------- wiring ----------
+
+  function showParseError(message) {
+    var el = document.getElementById("parseError");
+    if (message) {
+      el.hidden = false;
+      el.textContent = message;
+    } else {
+      el.hidden = true;
+      el.textContent = "";
+    }
+  }
+
+  document.getElementById("csvInput").addEventListener("change", function (evt) {
+    var file = evt.target.files && evt.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var result = parseCsv(String(reader.result));
+        state.rows = result.rows;
+        state.correctedUpload = correctSeries(state.rows, "rawUpload");
+        state.correctedDownload = correctSeries(state.rows, "rawDownload");
+        state.combined = combineSeries(state.correctedUpload, state.correctedDownload);
+        state.compareBuilt = false;
+        showParseError(result.skipped > 0 ?
+          ("Loaded with " + result.skipped + " row(s) skipped due to invalid/incomplete data.") : null);
+        if (result.skipped > 0) {
+          // Non-fatal notice, but keep it visible without the danger styling of a hard error.
+          document.getElementById("parseError").style.color = "var(--muted)";
+        } else {
+          document.getElementById("parseError").style.color = "";
+        }
+        renderAll();
+        if (document.getElementById("compareSection").classList.contains("shown")) {
+          state.compareBuilt = true;
+          renderCompareChart();
+        }
+      } catch (err) {
+        state.rows = null;
+        state.combined = null;
+        showParseError(err.message || String(err));
+      }
+    };
+    reader.onerror = function () {
+      showParseError("Could not read this file.");
+    };
+    reader.readAsText(file);
+  });
+
+  var limitInput = document.getElementById("limitInput");
+  var resetDayInput = document.getElementById("resetDayInput");
+  limitInput.value = state.config.limitGiB;
+  resetDayInput.value = state.config.resetDay;
+
+  function handleLimitChange() {
+    var v = parseFloat(limitInput.value);
+    var errEl = document.getElementById("limitError");
+    if (!isValidLimit(v)) {
+      errEl.textContent = "Enter a number greater than 0.";
+      return;
+    }
+    errEl.textContent = "";
+    state.config.limitGiB = v;
+    saveConfig();
+    renderAll();
+  }
+
+  function handleResetDayChange() {
+    var v = parseInt(resetDayInput.value, 10);
+    var errEl = document.getElementById("resetDayError");
+    if (!isValidResetDay(v)) {
+      errEl.textContent = "Enter a whole number between 1 and 28.";
+      return;
+    }
+    errEl.textContent = "";
+    state.config.resetDay = v;
+    saveConfig();
+    renderAll();
+  }
+
+  limitInput.addEventListener("change", handleLimitChange);
+  resetDayInput.addEventListener("change", handleResetDayChange);
+
+  var compareToggle = document.getElementById("compareToggle");
+  var compareSection = document.getElementById("compareSection");
+  compareToggle.addEventListener("click", function () {
+    var showing = compareSection.classList.toggle("shown");
+    compareToggle.innerHTML = showing ? "Compare past periods &#9650;" : "Compare past periods &#9660;";
+    if (showing && state.combined) {
+      state.compareBuilt = true;
+      renderCompareChart();
+    }
+  });
+
+  // ---------- theme toggle ----------
+
+  var THEME_KEY = "nokiaViewerTheme";
+  var themeToggle = document.getElementById("themeToggle");
+  var themeIcon = document.getElementById("themeIcon");
+  var themeLabel = document.getElementById("themeLabel");
+
+  function systemPrefersDark() {
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+
+  function applyTheme(theme) {
+    // theme: "light" | "dark"
+    document.documentElement.setAttribute("data-theme", theme);
+    themeIcon.textContent = theme === "dark" ? "\u{1F319}" : "☀️";
+    themeLabel.textContent = theme === "dark" ? "Dark" : "Light";
+    if (state.combined) renderAll(); // re-render charts with new axis/legend colors
+  }
+
+  function loadTheme() {
+    try {
+      var saved = localStorage.getItem(THEME_KEY);
+      if (saved === "light" || saved === "dark") return saved;
+    } catch (e) { /* ignore */ }
+    return systemPrefersDark() ? "dark" : "light";
+  }
+
+  var currentTheme = loadTheme();
+  applyTheme(currentTheme);
+
+  themeToggle.addEventListener("click", function () {
+    currentTheme = currentTheme === "dark" ? "light" : "dark";
+    applyTheme(currentTheme);
+    try { localStorage.setItem(THEME_KEY, currentTheme); } catch (e) { /* ignore */ }
+  });
+})();
+</script>
+</body>
+</html>

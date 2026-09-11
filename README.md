@@ -50,6 +50,12 @@ go test ./tests/...
 
 Add a Task Scheduler task with an "At startup" trigger that runs `nokia_logger.exe` with its working directory set to wherever `.env` lives. If you want more than one data point per boot, add a second trigger with a repeat interval, and set the task to skip a new instance if one's already running.
 
+## Visualising usage
+
+`viewer.html` is a standalone, single-file web app for visualising `data.csv`. Open it in a browser and pick your `data.csv` with the file picker. 
+
+Nothing in the CSV is uploaded anywhere; all parsing and charting happens client-side (Chart.js is loaded from a CDN, everything else is inline in the file).
+
 ### Technical notes
 
 - Login uses the same nonce/SHA256 challenge as the router's own JavaScript, POSTed to `/login_web_app.cgi` to get a session cookie. The nonce response also includes an RSA public key that the router's own web UI doesn't use for this step, it sends the AES key/IV as plain random bytes instead, and we copy this behaviour.
