@@ -27,12 +27,21 @@ type LoginResponse struct {
 	Tip          string `json:"tip"`
 }
 
-// StatsResponse is the router's response to GET /fastmile_radio_status_web_app.cgi.
-type StatsResponse struct {
+// Router's response to GET /fastmile_radio_status_web_app.cgi.
+type FastmileRadioResponse struct {
 	CellularStats []struct {
 		BytesSent     json.Number `json:"BytesSent"`
 		BytesReceived json.Number `json:"BytesReceived"`
 	} `json:"cellular_stats"`
+}
+
+// Router's response to GET /fastmile_statistics_status_web_app.cgi
+type FastmileStatsResponse struct {
+	StatsCfg []struct {
+		// Actually in MB
+		MegabytesSent     json.Number `json:"BytesSent"`
+		MegabytesReceived json.Number `json:"BytesReceived"`
+	} `json:"stats_cfg"`
 }
 
 // DeviceStatusResponse is the router's response to GET /device_status_web_app.cgi.
@@ -40,44 +49,61 @@ type DeviceStatusResponse struct {
 	UpTime json.Number `json:"UpTime"`
 }
 
-// FetchStats logs in to the router and returns the raw upload/download byte
-// counts and the device uptime in seconds.
-func FetchStats(cfg *Config) (upload, download, uptime json.Number, err error) {
+// Stats from all endpoints combined
+type RouterStats struct {
+	RadioUpload   json.Number
+	RadioDownload json.Number
+	StatsUpload   json.Number
+	StatsDownload json.Number
+	Uptime        json.Number
+}
+
+func FetchStats(cfg *Config) (RouterStats, error) {
 	jar, err := cookiejar.New(nil)
 	if err != nil {
-		return "", "", "", err
+		return RouterStats{}, err
 	}
-	// The router's HTTP server is HTTP/1.0 and closes the connection after
-	// every response without signaling it cleanly, which races against Go's
-	// default connection pooling and reuse. Disable keep-alives so each
-	// request gets its own fresh connection instead of reusing one the
-	// router may already be tearing down.
+
 	transport := &http.Transport{DisableKeepAlives: true}
 	client := &http.Client{Jar: jar, Timeout: 15 * time.Second, Transport: transport}
 
 	nonce, err := GetNonce(client, cfg.BaseURL)
 	if err != nil {
-		return "", "", "", fmt.Errorf("getting nonce: %w", err)
+		return RouterStats{}, fmt.Errorf("getting nonce: %w", err)
 	}
 
 	if err := Login(client, cfg.BaseURL, cfg.Username, cfg.Password, nonce); err != nil {
-		return "", "", "", fmt.Errorf("logging in: %w", err)
+		return RouterStats{}, fmt.Errorf("logging in: %w", err)
 	}
 
-	var stats StatsResponse
-	if err := GetJSON(client, cfg.BaseURL+"/fastmile_radio_status_web_app.cgi", &stats); err != nil {
-		return "", "", "", fmt.Errorf("getting radio stats: %w", err)
+	var radio FastmileRadioResponse
+	if err := GetJSON(client, cfg.BaseURL+"/fastmile_radio_status_web_app.cgi", &radio); err != nil {
+		return RouterStats{}, fmt.Errorf("getting radio stats: %w", err)
 	}
-	if len(stats.CellularStats) == 0 {
-		return "", "", "", fmt.Errorf("radio stats response had no cellular_stats entries")
+	if len(radio.CellularStats) == 0 {
+		return RouterStats{}, fmt.Errorf("radio stats response had no cellular_stats entries")
 	}
 
 	var device DeviceStatusResponse
 	if err := GetJSON(client, cfg.BaseURL+"/device_status_web_app.cgi", &device); err != nil {
-		return "", "", "", fmt.Errorf("getting device status: %w", err)
+		return RouterStats{}, fmt.Errorf("getting device status: %w", err)
 	}
 
-	return stats.CellularStats[0].BytesSent, stats.CellularStats[0].BytesReceived, device.UpTime, nil
+	var fastmileStats FastmileStatsResponse
+	if err := GetJSON(client, cfg.BaseURL+"/fastmile_statistics_status_web_app.cgi", &fastmileStats); err != nil {
+		return RouterStats{}, fmt.Errorf("getting fastmile statistics: %w", err)
+	}
+	if len(fastmileStats.StatsCfg) == 0 {
+		return RouterStats{}, fmt.Errorf("fastmile statistics response had no stats_cfg entries")
+	}
+
+	return RouterStats{
+		RadioUpload:   radio.CellularStats[0].BytesSent,
+		RadioDownload: radio.CellularStats[0].BytesReceived,
+		StatsUpload:   fastmileStats.StatsCfg[0].MegabytesSent,
+		StatsDownload: fastmileStats.StatsCfg[0].MegabytesReceived,
+		Uptime:        device.UpTime,
+	}, nil
 }
 
 // GetNonce fetches the login nonce and random key.

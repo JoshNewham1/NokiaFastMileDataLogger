@@ -15,12 +15,12 @@ func Run() {
 		Fail(cfg, fmt.Sprintf("loading config: %v", err))
 	}
 
-	upload, download, uptime, err := FetchStats(cfg)
+	stats, err := FetchStats(cfg)
 	if err != nil {
 		Fail(cfg, fmt.Sprintf("fetching stats: %v", err))
 	}
 
-	if err := AppendCSV(cfg.OutPath, time.Now().Format(time.RFC3339), upload, download, uptime); err != nil {
+	if err := AppendCSV(cfg.OutPath, time.Now().Format(time.RFC3339), stats); err != nil {
 		Fail(cfg, fmt.Sprintf("writing CSV: %v", err))
 	}
 }

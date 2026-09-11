@@ -62,17 +62,19 @@ func TestRandomBase64(t *testing.T) {
 }
 
 // fakeRouter builds an httptest.Server that plays the part of the Nokia
-// router across all four endpoints this program calls, so the HTTP-facing
+// router across all five endpoints this program calls, so the HTTP-facing
 // functions can be tested without a real device.
 type fakeRouter struct {
 	nonce         string
 	randomKey     string
 	loginResult   int
 	loginErrorMsg string
-	statsStatus   int
-	statsBody     string
+	radioStatus   int
+	radioBody     string
 	deviceStatus  int
 	deviceBody    string
+	statsStatus   int
+	statsBody     string
 }
 
 func (f *fakeRouter) start(t *testing.T) *httptest.Server {
@@ -90,12 +92,16 @@ func (f *fakeRouter) start(t *testing.T) *httptest.Server {
 		fmt.Fprintf(w, `{"result":%d,"failurecount":1,"tip":""}`, f.loginResult)
 	})
 	mux.HandleFunc("/fastmile_radio_status_web_app.cgi", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(f.statsStatus)
-		fmt.Fprint(w, f.statsBody)
+		w.WriteHeader(f.radioStatus)
+		fmt.Fprint(w, f.radioBody)
 	})
 	mux.HandleFunc("/device_status_web_app.cgi", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(f.deviceStatus)
 		fmt.Fprint(w, f.deviceBody)
+	})
+	mux.HandleFunc("/fastmile_statistics_status_web_app.cgi", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(f.statsStatus)
+		fmt.Fprint(w, f.statsBody)
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -107,10 +113,12 @@ func defaultFakeRouter() *fakeRouter {
 		nonce:        "dGVzdC1ub25jZQ==",
 		randomKey:    "123",
 		loginResult:  0,
-		statsStatus:  http.StatusOK,
-		statsBody:    `{"cellular_stats":[{"BytesSent":1000000,"BytesReceived":2000000}]}`,
+		radioStatus:  http.StatusOK,
+		radioBody:    `{"cellular_stats":[{"BytesSent":1000000,"BytesReceived":2000000}]}`,
 		deviceStatus: http.StatusOK,
 		deviceBody:   `{"UpTime":12345}`,
+		statsStatus:  http.StatusOK,
+		statsBody:    `{"stats_cfg":[{"BytesSent":48145,"BytesReceived":2162}]}`,
 	}
 }
 
@@ -118,15 +126,18 @@ func TestFetchStatsSuccess(t *testing.T) {
 	srv := defaultFakeRouter().start(t)
 	cfg := &nokialogger.Config{BaseURL: srv.URL, Username: "admin", Password: "pass"}
 
-	upload, download, uptime, err := nokialogger.FetchStats(cfg)
+	stats, err := nokialogger.FetchStats(cfg)
 	if err != nil {
 		t.Fatalf("FetchStats: %v", err)
 	}
-	if upload.String() != "1000000" || download.String() != "2000000" {
-		t.Errorf("got upload=%s download=%s", upload, download)
+	if stats.RadioUpload.String() != "1000000" || stats.RadioDownload.String() != "2000000" {
+		t.Errorf("got radio upload=%s download=%s", stats.RadioUpload, stats.RadioDownload)
 	}
-	if uptime.String() != "12345" {
-		t.Errorf("got uptime=%s", uptime)
+	if stats.StatsUpload.String() != "48145" || stats.StatsDownload.String() != "2162" {
+		t.Errorf("got stats upload=%s download=%s", stats.StatsUpload, stats.StatsDownload)
+	}
+	if stats.Uptime.String() != "12345" {
+		t.Errorf("got uptime=%s", stats.Uptime)
 	}
 }
 
@@ -137,7 +148,7 @@ func TestFetchStatsLoginRejected(t *testing.T) {
 	srv := fr.start(t)
 	cfg := &nokialogger.Config{BaseURL: srv.URL, Username: "admin", Password: "wrong"}
 
-	_, _, _, err := nokialogger.FetchStats(cfg)
+	_, err := nokialogger.FetchStats(cfg)
 	if err == nil || !strings.Contains(err.Error(), "bad credentials") {
 		t.Fatalf("got err=%v, want it to mention the router's error_msg", err)
 	}
@@ -149,7 +160,7 @@ func TestFetchStatsLoginRejectedWithoutErrorMsg(t *testing.T) {
 	srv := fr.start(t)
 	cfg := &nokialogger.Config{BaseURL: srv.URL, Username: "admin", Password: "wrong"}
 
-	_, _, _, err := nokialogger.FetchStats(cfg)
+	_, err := nokialogger.FetchStats(cfg)
 	if err == nil || !strings.Contains(err.Error(), "failurecount") {
 		t.Fatalf("got err=%v, want the composed result/failurecount/tip message", err)
 	}
@@ -157,23 +168,23 @@ func TestFetchStatsLoginRejectedWithoutErrorMsg(t *testing.T) {
 
 func TestFetchStatsEmptyCellularStats(t *testing.T) {
 	fr := defaultFakeRouter()
-	fr.statsBody = `{"cellular_stats":[]}`
+	fr.radioBody = `{"cellular_stats":[]}`
 	srv := fr.start(t)
 	cfg := &nokialogger.Config{BaseURL: srv.URL, Username: "admin", Password: "pass"}
 
-	_, _, _, err := nokialogger.FetchStats(cfg)
+	_, err := nokialogger.FetchStats(cfg)
 	if err == nil || !strings.Contains(err.Error(), "no cellular_stats") {
 		t.Fatalf("got err=%v, want a no-cellular_stats error", err)
 	}
 }
 
-func TestFetchStatsStatsEndpointError(t *testing.T) {
+func TestFetchStatsRadioEndpointError(t *testing.T) {
 	fr := defaultFakeRouter()
-	fr.statsStatus = http.StatusInternalServerError
+	fr.radioStatus = http.StatusInternalServerError
 	srv := fr.start(t)
 	cfg := &nokialogger.Config{BaseURL: srv.URL, Username: "admin", Password: "pass"}
 
-	_, _, _, err := nokialogger.FetchStats(cfg)
+	_, err := nokialogger.FetchStats(cfg)
 	if err == nil || !strings.Contains(err.Error(), "getting radio stats") {
 		t.Fatalf("got err=%v, want a wrapped radio-stats error", err)
 	}
@@ -185,9 +196,33 @@ func TestFetchStatsDeviceEndpointError(t *testing.T) {
 	srv := fr.start(t)
 	cfg := &nokialogger.Config{BaseURL: srv.URL, Username: "admin", Password: "pass"}
 
-	_, _, _, err := nokialogger.FetchStats(cfg)
+	_, err := nokialogger.FetchStats(cfg)
 	if err == nil || !strings.Contains(err.Error(), "getting device status") {
 		t.Fatalf("got err=%v, want a wrapped device-status error", err)
+	}
+}
+
+func TestFetchStatsEmptyStatsCfg(t *testing.T) {
+	fr := defaultFakeRouter()
+	fr.statsBody = `{"stats_cfg":[]}`
+	srv := fr.start(t)
+	cfg := &nokialogger.Config{BaseURL: srv.URL, Username: "admin", Password: "pass"}
+
+	_, err := nokialogger.FetchStats(cfg)
+	if err == nil || !strings.Contains(err.Error(), "no stats_cfg") {
+		t.Fatalf("got err=%v, want a no-stats_cfg error", err)
+	}
+}
+
+func TestFetchStatsFastmileStatisticsEndpointError(t *testing.T) {
+	fr := defaultFakeRouter()
+	fr.statsStatus = http.StatusInternalServerError
+	srv := fr.start(t)
+	cfg := &nokialogger.Config{BaseURL: srv.URL, Username: "admin", Password: "pass"}
+
+	_, err := nokialogger.FetchStats(cfg)
+	if err == nil || !strings.Contains(err.Error(), "getting fastmile statistics") {
+		t.Fatalf("got err=%v, want a wrapped fastmile-statistics error", err)
 	}
 }
 

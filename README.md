@@ -1,6 +1,6 @@
 # Nokia FastMile Data Logger
 
-A small cross-platform tool that logs into a Nokia FastMile 5G router's web UI, reads the Cellular Packets Upload/Download totals and device uptime, and appends a timestamped row to a CSV file. It collects one data point per execution, and is intended to be triggered by Windows Task Scheduler/cron at will.
+A small cross-platform tool that logs into a Nokia FastMile 5G router's web UI, reads the Cellular Packets Upload/Download totals from both the FastMile Radio page and Bytes Sent/Received from the Fastmile statistics page, and appends a timestamped row to a CSV file. It collects one data point per execution, and is intended to be triggered by Windows Task Scheduler/cron at will.
 
 ## Setup
 
@@ -13,7 +13,12 @@ Create a `.env` file next to the executable (see `.env.example`) with:
 
 ## How it works
 
-This logs into the router's admin page, the same one you'd open in a browser, goes to Status > FastMile Radio, and fetches the Cellular Packets Upload/Download totals and the device's running time. Instead of a browser, it makes those same requests directly and writes the results as one row in a CSV file with the **timestamp, upload, download, and uptime**.
+This logs into the router's admin page and reads Upload/Download totals from two different pages plus the device's running time. Instead of a browser, it makes those same requests directly:
+
+- **Status > FastMile Radio** - the original counters this tool has always logged.
+- **Status > Fastmile statistics** - a separate counter on the router that's believed to be more consistent/accurate than the Radio page's. Logged alongside the Radio numbers, not instead of them, so the two can be compared over time.
+
+Both are fetched using the same logged-in session, no extra login step. Each run writes one CSV row with the **timestamp, both sources' upload/download figures, and uptime**.
 
 If anything goes wrong (can't log in, can't reach the router, can't write the file), it sends a failure email if Mailjet is configured, otherwise it just prints the error. Either way, it doesn't retry. Each run is one attempt.
 
@@ -48,8 +53,11 @@ Add a Task Scheduler task with an "At startup" trigger that runs `nokia_logger.e
 ### Technical notes
 
 - Login uses the same nonce/SHA256 challenge as the router's own JavaScript, POSTed to `/login_web_app.cgi` to get a session cookie. The nonce response also includes an RSA public key that the router's own web UI doesn't use for this step, it sends the AES key/IV as plain random bytes instead, and we copy this behaviour.
-- Stats come from `GET /fastmile_radio_status_web_app.cgi` (`cellular_stats[].BytesSent`/`BytesReceived`, in raw bytes) and `GET /device_status_web_app.cgi` (`UpTime`, in seconds).
-- The CSV records upload/download as raw bytes plus derived MiB (divide by 1,048,576) and GiB (divide by 1,073,741,824), since that's what the FastMile Radio page itself shows.
+- FastMile Radio page stats come from `GET /fastmile_radio_status_web_app.cgi` (`cellular_stats[].BytesSent`/`BytesReceived`, in raw bytes).
+- Fastmile statistics page stats come from `GET /fastmile_statistics_status_web_app.cgi` (`stats_cfg[0].BytesSent`/`BytesReceived`, in raw bytes).
+- Device uptime comes from `GET /device_status_web_app.cgi` (`UpTime`, in seconds).
+- The CSV records each source's upload/download as raw bytes plus derived GiB (divide by 1,073,741,824), with columns prefixed `radio_` and `stats_` respectively (e.g. `radio_upload_bytes`, `stats_download_gib`), plus `uptime_seconds`.
+
 
 ## Limitations
 

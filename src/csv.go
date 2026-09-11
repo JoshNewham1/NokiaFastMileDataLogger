@@ -8,18 +8,14 @@ import (
 	"path/filepath"
 )
 
-// Unit sizes used to convert the router's raw byte counts. These are
-// mebibytes/gibibytes (1024-based), not decimal megabytes/gigabytes,
-// matching how Three defines MB/GB for data allowances.
-const (
-	Mebibyte = 1_048_576
-	Gibibyte = 1_073_741_824
-)
+const Megabyte = 1e6
+const Gibibyte = 1_073_741_824
 
-// AppendCSV appends one row (timestamp, upload/download in bytes and
-// derived MiB/GiB, uptime in seconds) to the CSV file at path, writing the
-// header first if the file is new or empty.
-func AppendCSV(path, timestamp string, upload, download, uptime json.Number) error {
+// AppendCSV appends one row to the CSV file at path, writing the header
+// first if the file is new or empty. Each row records raw bytes and derived
+// GiB for both stats sources (the FastMile Radio page and the Fastmile
+// statistics page), plus the device uptime in seconds.
+func AppendCSV(path, timestamp string, stats RouterStats) error {
 	if dir := filepath.Dir(path); dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err
@@ -43,36 +39,41 @@ func AppendCSV(path, timestamp string, upload, download, uptime json.Number) err
 	if writeHeader {
 		if err := w.Write([]string{
 			"timestamp",
-			"upload_bytes", "upload_mib", "upload_gib",
-			"download_bytes", "download_mib", "download_gib",
+			"radio_upload_bytes", "radio_upload_gib",
+			"radio_download_bytes", "radio_download_gib",
+			"stats_upload_mb", "stats_upload_gib",
+			"stats_download_mb", "stats_download_gib",
 			"uptime_seconds",
 		}); err != nil {
 			return err
 		}
 	}
 
-	uploadMB, err := ConvertBytes(upload, Mebibyte)
+	radioUploadGiB, err := ConvertBytes(stats.RadioUpload, Gibibyte)
 	if err != nil {
-		return fmt.Errorf("converting upload bytes to MB: %w", err)
+		return fmt.Errorf("converting radio upload bytes to GiB: %w", err)
 	}
-	uploadGiB, err := ConvertBytes(upload, Gibibyte)
+	radioDownloadGiB, err := ConvertBytes(stats.RadioDownload, Gibibyte)
 	if err != nil {
-		return fmt.Errorf("converting upload bytes to GiB: %w", err)
+		return fmt.Errorf("converting radio download bytes to GiB: %w", err)
 	}
-	downloadMB, err := ConvertBytes(download, Mebibyte)
+	// Fastmile statistics page shows values in MB, GiB/MB == convert to bytes then GiB
+	statsUploadGiB, err := ConvertBytes(stats.StatsUpload, Gibibyte/Megabyte)
 	if err != nil {
-		return fmt.Errorf("converting download bytes to MB: %w", err)
+		return fmt.Errorf("converting stats upload bytes to GiB: %w", err)
 	}
-	downloadGiB, err := ConvertBytes(download, Gibibyte)
+	statsDownloadGiB, err := ConvertBytes(stats.StatsDownload, Gibibyte/Megabyte)
 	if err != nil {
-		return fmt.Errorf("converting download bytes to GiB: %w", err)
+		return fmt.Errorf("converting stats download bytes to GiB: %w", err)
 	}
 
 	return w.Write([]string{
 		timestamp,
-		upload.String(), uploadMB, uploadGiB,
-		download.String(), downloadMB, downloadGiB,
-		uptime.String(),
+		stats.RadioUpload.String(), radioUploadGiB,
+		stats.RadioDownload.String(), radioDownloadGiB,
+		stats.StatsUpload.String(), statsUploadGiB,
+		stats.StatsDownload.String(), statsDownloadGiB,
+		stats.Uptime.String(),
 	})
 }
 
